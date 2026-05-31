@@ -3,33 +3,53 @@ import base64
 import pandas as pd
 import plotly.express as px
 import google.generativeai as genai
+from dotenv import load_dotenv
+import os
+
+
 
 # 1. SAYFA AYARLARI
 st.set_page_config(page_title="Tersane Üretim Dashboard", page_icon="🚢", layout="wide")
 
-# --- ÖZEL CSS TASARIMI (JİLET GİBİ GÖRÜNÜM İÇİN) ---
+# --- CSS TASARIMI (SABİT YÜZEN BUTON VE PENCERE) ---
 st.markdown("""
-<style>
-    
-    [data-testid="stMetric"] {
-        background-color: rgba(30, 30, 46, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 15px 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        transition: all 0.3s ease-in-out;
-    }
-    [data-testid="stMetric"]:hover {
-        transform: translateY(-6px);
-        border: 1px solid rgba(0, 212, 255, 0.8);
-        box-shadow: 0 8px 20px rgba(0, 212, 255, 0.2);
-    }
-    /* Ana başlık tipografisi */
-    h1 {
-        font-weight: 700 !important;
-        letter-spacing: 1px;
-    }
-</style>
+    <style>
+        /* Açılır-kapanır (Popover) kapsayıcısını ekranın sağ altına sabitle */
+        [data-testid="stPopover"] {
+            position: fixed !important;
+            bottom: 30px !important;
+            right: 30px !important;
+            z-index: 9999 !important;
+        }
+        
+        /* Sağ alttaki chat butonunun yuvarlak ve fiyakalı görünmesini sağla */
+        [data-testid="stPopover"] > button {
+            border-radius: 50px !important;
+            height: 65px !important;
+            width: 65px !important;
+            background-color: #2e66ff !important;
+            color: white !important;
+            border: none !important;
+            box-shadow: 0px 8px 16px rgba(0,0,0,0.3) !important;
+            font-size: 26px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        
+        /* Chat butonu üzerine gelince oluşan hafif büyüme efekti */
+        [data-testid="stPopover"] > button:hover {
+            background-color: #1a4cd9 !important;
+            transform: scale(1.08);
+            transition: all 0.2s ease-in-out;
+        }
+        
+        /* Popover açıldığında pencerenin dashboard bileşenlerinin önünde durmasını sağlama */
+        [data-testid="stPopoverBody"] {
+            box-shadow: 0px 10px 25px rgba(0,0,0,0.3) !important;
+            border-radius: 12px !important;
+        }
+    </style>
 """, unsafe_allow_html=True)
 
 # 2. VERİYİ YÜKLEME
@@ -52,7 +72,6 @@ secilen_siparis = st.sidebar.multiselect(
 
 df_filtrelenmis = df[df["Sipariş_Kodu"].isin(secilen_siparis)]
 
-
 # 4. ANA EKRAN BAŞLIĞI VE SİNEMATİK VİDEO HEADER
 def get_base64_video(file_path):
     with open(file_path, 'rb') as f:
@@ -60,7 +79,6 @@ def get_base64_video(file_path):
     return base64.b64encode(data).decode()
 
 try:
-    # Klasöründeki stock1.mp4 dosyasını okuyoruz
     video_base64 = get_base64_video("stock1.mp4")
 
     st.markdown(f"""
@@ -118,9 +136,76 @@ try:
         </div>
     """, unsafe_allow_html=True)
 except FileNotFoundError:
-    # Eğer isimlendirmede hata olursa uygulama çökmesin diye yedek başlık
     st.title("🚢 Tersane Üretim & Blok Takip Merkezi")
     st.markdown("---")
+
+# 5. JİLET GİBİ AÇILIR-KAPANIR GEMINI YAPAY ZEKA ASİSTANI (CSV Verisine Bağlı)
+
+
+api_key = st.secrets["GEMINI_API_KEY"]
+genai.configure(api_key=api_key)
+
+with st.popover("🔮"):
+    st.markdown("### 🤖 Gemini Operasyon Asistanı")
+    st.markdown("---")
+    
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "Gemini", "content": "Merhaba! Üretim istasyonundaki darboğazlar veya bütçe sapmaları hakkında ne öğrenmek istersin?"}]
+    
+    for msg in st.session_state.messages:
+        if msg["role"] == "Gemini":
+            st.info(msg["content"])
+        else:
+            st.success(f"**Sen:** {msg['content']}")
+            
+    user_input = st.text_input("Gemini'ye sor...", key="gemini_soru")
+    
+    if st.button("Soruyu Gönder"):
+        if user_input:
+            st.session_state.messages.append({"role": "Sen", "content": user_input})
+            
+            with st.spinner("Canlı tersane verileri analiz ediliyor..."):
+                try:
+                    # Modelin 2.5-flash olarak ayarlandı, efsane çalışacak
+                    model = genai.GenerativeModel('gemini-2.5-flash') 
+                    
+                    # --- AI'A GÖNDERİLECEK CANLI VERİ ÖZETİ (ETL PIPELINE) ---
+                    toplam_blok = len(df_filtrelenmis)
+                    planlanan_maliyet = df_filtrelenmis["Planlanan_Maliyet_USD"].sum()
+                    gerceklesen_maliyet = df_filtrelenmis["Gerçekleşen_Maliyet_USD"].sum()
+                    butce_sapmasi = gerceklesen_maliyet - planlanan_maliyet
+                    istasyon_gecikmeleri = df_filtrelenmis.groupby("İstasyon")["Gecikme_Süresi_Gün"].sum().to_string()
+                    kalite_ozeti = df_filtrelenmis["NDT_Sonucu"].value_counts().to_string()
+                    
+                    # --- JİLET GİBİ SİSTEM KOMUTU (PROMPT) ---
+                    gelismis_prompt = f"""
+                    Sen bir Tersane Operasyon Yönetim Asistanısın. Amacın, üretim müdürlerine hızla net veriler sunmaktır.
+                    ASLA sözlük tanımları veya uzun teorik açıklamalar yapma. 
+                    
+                    [CANLI SİSTEM VERİLERİ]
+                    - Toplam Üretim Bloğu: {toplam_blok}
+                    - Toplam Planlanan Bütçe: ${planlanan_maliyet:,.0f}
+                    - Şu Ana Kadar Gerçekleşen Maliyet: ${gerceklesen_maliyet:,.0f}
+                    - Güncel Bütçe Sapması: ${butce_sapmasi:,.0f}
+                    
+                    [İSTASYON BAZLI GECİKME GÜNLERİ ÖZETİ]
+                    {istasyon_gecikmeleri}
+                    
+                    [KALİTE KONTROL (NDT) SONUÇLARI]
+                    {kalite_ozeti}
+                    
+                    Yöneticinin Sorusu: {user_input}
+                    """
+                    
+                    # Promptu API'ye gönder
+                    response = model.generate_content(gelismis_prompt)
+                    cevap = response.text
+                except Exception as e:
+                    cevap = f"HATA! Detay: {e}"
+            
+            st.session_state.messages.append({"role": "Gemini", "content": cevap})
+            st.rerun()
+
 
 # 5. TEPEDEKİ ANA METRİKLER (KPIs)
 st.subheader("📊 Genel Performans Göstergeleri")
@@ -189,40 +274,3 @@ with col4:
 st.markdown("---")
 
 # 8. YAPAY ZEKA TERSANE ASİSTANI
-st.header("🤖 Akıllı Tersane Asistanı (Gemini AI)")
-st.markdown("Tersane verilerindeki darboğazları veya verimlilik önerilerini yapay zekaya sorun.")
-
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-flash-latest') 
-    
-    kullanici_sorusu = st.text_input("Örn: Hangi taşeron firmayı değiştirmeliyiz? / En çok gecikme hangi siparişte?")
-    
-    if st.button("🔍 Verileri Analiz Et") and kullanici_sorusu:
-        with st.spinner("Yapay zeka verileri analiz edip raporluyor..."):
-            sorunlu_veri = df_filtrelenmis[df_filtrelenmis["Gecikme_Süresi_Gün"] > 0]
-            if len(sorunlu_veri) > 50:
-                sorunlu_veri = sorunlu_veri.head(50)
-                
-            veri_ozeti = sorunlu_veri.to_csv(index=False)
-            genel_durum = f"""
-            Toplam İncelenen Blok: {len(df_filtrelenmis)}
-            Tamamlanan Blok: {len(df_filtrelenmis[df_filtrelenmis['Durum'] == 'Tamamlandı'])}
-            Toplam Planlanan Bütçe: ${df_filtrelenmis['Planlanan_Maliyet_USD'].sum():,.0f}
-            Toplam Gerçekleşen Bütçe: ${df_filtrelenmis['Gerçekleşen_Maliyet_USD'].sum():,.0f}
-            """
-            prompt = f"""
-            Sen uzman bir Tersane Üretim Yöneticisi ve Veri Analistisin. 
-            Aşağıda projenin genel durumu ve sadece 'gecikme/sorun yaşayan' kritik blokların tablosu verilmiştir.
-            Genel Durum:\n{genel_durum}\nKritik (Gecikmeli) Bloklar:\n{veri_ozeti}
-            Kullanıcının Sorusu: {kullanici_sorusu}
-            Doğrudan bu verilere dayanarak kısa, net ve profesyonel bir analiz sun.
-            """
-            try:
-                response = model.generate_content(prompt)
-                st.info(response.text)
-            except Exception as e:
-                st.warning("⚠️ Yapay zeka ile bağlantı şu an kurulamadı. Lütfen birazdan tekrar deneyin.")
-                
-except KeyError:
-    st.error("❌ Hata: API Key bulunamadı. Lütfen .streamlit/secrets.toml dosyasını kontrol edin.")
