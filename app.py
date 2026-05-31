@@ -159,6 +159,9 @@ with st.popover("🔮 Gemini Asistan"):
                 model = genai.GenerativeModel('gemini-2.5-flash')
 
                 toplam_blok = len(df_filtrelenmis)
+                tamamlanan_blok = len(df_filtrelenmis[df_filtrelenmis["Durum"] == "Tamamlandı"])
+                devam_eden_blok = len(df_filtrelenmis[df_filtrelenmis["Durum"] == "Devam Ediyor"])
+                ilerleme_yuzdesi = int(((tamamlanan_blok / toplam_blok) * 100) if toplam_blok > 0 else 0)
                 planlanan_maliyet = df_filtrelenmis["Planlanan_Maliyet_USD"].sum()
                 gerceklesen_maliyet = df_filtrelenmis["Gerçekleşen_Maliyet_USD"].sum()
                 butce_sapmasi = gerceklesen_maliyet - planlanan_maliyet
@@ -169,6 +172,9 @@ with st.popover("🔮 Gemini Asistan"):
                 Sen bir Tersane Operasyon Asistanısın. Kısa ve net cevap ver.
                 [VERİLER]
                 - Toplam Blok: {toplam_blok}
+                - Tamamlanan Blok: {tamamlanan_blok}
+                - Devam Eden Blok {devam_eden_blok}
+                - Genel İlerleme %{ilerleme_yuzdesi}
                 - Planlanan Bütçe: ${planlanan_maliyet:,.0f}
                 - Gerçekleşen Maliyet: ${gerceklesen_maliyet:,.0f}
                 - Bütçe Sapması: ${butce_sapmasi:,.0f}
