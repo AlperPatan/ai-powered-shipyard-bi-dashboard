@@ -1,53 +1,47 @@
+
 import streamlit as st
 import base64
 import pandas as pd
 import plotly.express as px
 import google.generativeai as genai
-from dotenv import load_dotenv
 import os
-
-
 
 # 1. SAYFA AYARLARI
 st.set_page_config(page_title="Tersane Üretim Dashboard", page_icon="🚢", layout="wide")
 
-# --- CSS TASARIMI (SABİT YÜZEN BUTON VE PENCERE) ---
+# --- CSS ---
 st.markdown("""
     <style>
-        /* Açılır-kapanır (Popover) kapsayıcısını ekranın sağ altına sabitle */
         [data-testid="stPopover"] {
             position: fixed !important;
             bottom: 30px !important;
             right: 30px !important;
             z-index: 9999 !important;
         }
-        
-        /* Sağ alttaki chat butonunun yuvarlak ve fiyakalı görünmesini sağla */
+
         [data-testid="stPopover"] > button {
-            border-radius: 50px !important;
-            height: 65px !important;
-            width: 65px !important;
+            border-radius: 50% !important;
+            height: 55px !important;
+            min-width: 55px !important;
+            max-width: 55px !important;
+            padding: 0px !important;
             background-color: #2e66ff !important;
             color: white !important;
             border: none !important;
             box-shadow: 0px 8px 16px rgba(0,0,0,0.3) !important;
-            font-size: 26px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
+            font-size: 24px !important;
         }
-        
-        /* Chat butonu üzerine gelince oluşan hafif büyüme efekti */
+
         [data-testid="stPopover"] > button:hover {
             background-color: #1a4cd9 !important;
             transform: scale(1.08);
             transition: all 0.2s ease-in-out;
         }
-        
-        /* Popover açıldığında pencerenin dashboard bileşenlerinin önünde durmasını sağlama */
+
         [data-testid="stPopoverBody"] {
             box-shadow: 0px 10px 25px rgba(0,0,0,0.3) !important;
             border-radius: 12px !important;
+            width: 350px !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -60,7 +54,7 @@ def load_data():
 df = load_data()
 
 # 3. YAN MENÜ (Sidebar)
-st.sidebar.image("logo.png", width=150) # Logomuz
+st.sidebar.image("logo.png", width=150)
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
 st.sidebar.header("🔍 Filtreleme Paneli")
 
@@ -72,15 +66,15 @@ secilen_siparis = st.sidebar.multiselect(
 
 df_filtrelenmis = df[df["Sipariş_Kodu"].isin(secilen_siparis)]
 
-# 4. ANA EKRAN BAŞLIĞI VE SİNEMATİK VİDEO HEADER
+# 4. VİDEO HEADER
 def get_base64_video(file_path):
     with open(file_path, 'rb') as f:
         data = f.read()
     return base64.b64encode(data).decode()
 
 try:
+  
     video_base64 = get_base64_video("stock1.mp4")
-
     st.markdown(f"""
         <style>
         .video-container {{
@@ -99,11 +93,9 @@ try:
         }}
         .video-overlay {{
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to right, rgba(15, 32, 39, 0.95), rgba(32, 58, 67, 0.7), rgba(44, 83, 100, 0.3));
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(to right, rgba(15,32,39,0.95), rgba(32,58,67,0.7), rgba(44,83,100,0.3));
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -124,7 +116,6 @@ try:
             text-shadow: 1px 1px 5px rgba(0,0,0,0.5);
         }}
         </style>
-
         <div class="video-container">
             <video autoplay loop muted playsinline>
                 <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
@@ -137,75 +128,63 @@ try:
     """, unsafe_allow_html=True)
 except FileNotFoundError:
     st.title("🚢 Tersane Üretim & Blok Takip Merkezi")
-    st.markdown("---")
+    st.markdown("---")  
 
-# 5. JİLET GİBİ AÇILIR-KAPANIR GEMINI YAPAY ZEKA ASİSTANI (CSV Verisine Bağlı)
-
-
+# 5. GEMİNİ
 api_key = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=api_key)
 
-with st.popover("🔮"):
+with st.popover("🔮 Gemini Asistan"):
     st.markdown("### 🤖 Gemini Operasyon Asistanı")
     st.markdown("---")
-    
+
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "Gemini", "content": "Merhaba! Üretim istasyonundaki darboğazlar veya bütçe sapmaları hakkında ne öğrenmek istersin?"}]
-    
+        st.session_state.messages = [
+            {"role": "Gemini", "content": "Merhaba! Darboğazlar veya bütçe sapmaları hakkında ne öğrenmek istersin?"}
+        ]
+
     for msg in st.session_state.messages:
         if msg["role"] == "Gemini":
             st.info(msg["content"])
         else:
             st.success(f"**Sen:** {msg['content']}")
-            
-    user_input = st.text_input("Gemini'ye sor...", key="gemini_soru")
-    
-    if st.button("Soruyu Gönder"):
-        if user_input:
-            st.session_state.messages.append({"role": "Sen", "content": user_input})
-            
-            with st.spinner("Canlı tersane verileri analiz ediliyor..."):
-                try:
-                    # Modelin 2.5-flash olarak ayarlandı, efsane çalışacak
-                    model = genai.GenerativeModel('gemini-2.5-flash') 
-                    
-                    # --- AI'A GÖNDERİLECEK CANLI VERİ ÖZETİ (ETL PIPELINE) ---
-                    toplam_blok = len(df_filtrelenmis)
-                    planlanan_maliyet = df_filtrelenmis["Planlanan_Maliyet_USD"].sum()
-                    gerceklesen_maliyet = df_filtrelenmis["Gerçekleşen_Maliyet_USD"].sum()
-                    butce_sapmasi = gerceklesen_maliyet - planlanan_maliyet
-                    istasyon_gecikmeleri = df_filtrelenmis.groupby("İstasyon")["Gecikme_Süresi_Gün"].sum().to_string()
-                    kalite_ozeti = df_filtrelenmis["NDT_Sonucu"].value_counts().to_string()
-                    
-                    # --- JİLET GİBİ SİSTEM KOMUTU (PROMPT) ---
-                    gelismis_prompt = f"""
-                    Sen bir Tersane Operasyon Yönetim Asistanısın. Amacın, üretim müdürlerine hızla net veriler sunmaktır.
-                    ASLA sözlük tanımları veya uzun teorik açıklamalar yapma. 
-                    
-                    [CANLI SİSTEM VERİLERİ]
-                    - Toplam Üretim Bloğu: {toplam_blok}
-                    - Toplam Planlanan Bütçe: ${planlanan_maliyet:,.0f}
-                    - Şu Ana Kadar Gerçekleşen Maliyet: ${gerceklesen_maliyet:,.0f}
-                    - Güncel Bütçe Sapması: ${butce_sapmasi:,.0f}
-                    
-                    [İSTASYON BAZLI GECİKME GÜNLERİ ÖZETİ]
-                    {istasyon_gecikmeleri}
-                    
-                    [KALİTE KONTROL (NDT) SONUÇLARI]
-                    {kalite_ozeti}
-                    
-                    Yöneticinin Sorusu: {user_input}
-                    """
-                    
-                    # Promptu API'ye gönder
-                    response = model.generate_content(gelismis_prompt)
-                    cevap = response.text
-                except Exception as e:
-                    cevap = f"HATA! Detay: {e}"
-            
-            st.session_state.messages.append({"role": "Gemini", "content": cevap})
-            st.rerun()
 
+    user_input = st.chat_input("Gemini'ye sor...", key="gemini_soru")
+
+    if user_input:
+        st.session_state.messages.append({"role": "Sen", "content": user_input})
+
+        with st.spinner("Analiz ediliyor..."):
+            try:
+                model = genai.GenerativeModel('gemini-2.5-flash')
+
+                toplam_blok = len(df_filtrelenmis)
+                planlanan_maliyet = df_filtrelenmis["Planlanan_Maliyet_USD"].sum()
+                gerceklesen_maliyet = df_filtrelenmis["Gerçekleşen_Maliyet_USD"].sum()
+                butce_sapmasi = gerceklesen_maliyet - planlanan_maliyet
+                istasyon_gecikmeleri = df_filtrelenmis.groupby("İstasyon")["Gecikme_Süresi_Gün"].sum().to_string()
+                kalite_ozeti = df_filtrelenmis["NDT_Sonucu"].value_counts().to_string()
+
+                prompt = f"""
+                Sen bir Tersane Operasyon Asistanısın. Kısa ve net cevap ver.
+                [VERİLER]
+                - Toplam Blok: {toplam_blok}
+                - Planlanan Bütçe: ${planlanan_maliyet:,.0f}
+                - Gerçekleşen Maliyet: ${gerceklesen_maliyet:,.0f}
+                - Bütçe Sapması: ${butce_sapmasi:,.0f}
+                - Gecikme Özeti: {istasyon_gecikmeleri}
+                - Kalite Özeti: {kalite_ozeti}
+                Soru: {user_input}
+                """
+
+                response = model.generate_content(prompt)
+                cevap = response.text
+
+            except Exception as e:
+                cevap = f"Hata: {e}"
+
+        st.session_state.messages.append({"role": "Gemini", "content": cevap})
+        st.rerun()
 
 # 5. TEPEDEKİ ANA METRİKLER (KPIs)
 st.subheader("📊 Genel Performans Göstergeleri")
