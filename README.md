@@ -13,7 +13,7 @@ This project is an Enterprise Business Intelligence (BI) application designed to
 * **Interactive Data Visualization:** Station-based delay identification and Non-Destructive Testing (NDT) quality distribution using Plotly Express.
 * **Generative AI Integration:** Powered by the **Google Gemini Large Language Model (LLM)**. Shipyard managers can interrogate the production database using Natural Language Processing (NLP) to receive instant root-cause diagnostics and strategic recommendations.
 
-```markdown
+
 ### Dashboard Preview
 ![Shipyard Dashboard](dashboard_view.png)
 
